@@ -48,7 +48,7 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(chatRoomName.isEmpty ? 'Loading...' : chatRoomName),
-        actions: [
+        /*actions: [
           IconButton(
             icon: const Icon(Icons.exit_to_app),
             onPressed: () async {
@@ -59,7 +59,7 @@ class _ChatPageState extends State<ChatPage> {
               );
             },
           ),
-        ],
+        ],*/
       ),
       body: StreamBuilder<List<Message>>(
         stream: _messagesStream,
