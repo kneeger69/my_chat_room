@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:my_chat_app/pages/chat_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../controllers/auth_controller.dart';
+import '../controllers/chat_controller.dart';
 import '../utils/constants.dart';
+import 'login_page.dart';
 
 class ChatRoomListPage extends StatefulWidget {
   const ChatRoomListPage({Key? key}) : super(key: key);
@@ -16,11 +19,13 @@ class ChatRoomListPage extends StatefulWidget {
 }
 
 class _ChatRoomListPageState extends State<ChatRoomListPage> {
+  late final AuthController _authController;
   late final Stream<List<Map<String, dynamic>>> _chatRoomsStream;
 
   @override
   void initState() {
     super.initState();
+    _authController = AuthController();
     _chatRoomsStream = supabase
         .from('chat_rooms')
         .stream(primaryKey: ['id'])
@@ -28,10 +33,71 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
         .map((maps) => maps.toList());
   }
 
+  void _logout() async {
+    await supabase.auth.signOut();
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+  }
+
+  void _showCreateRoomDialog() {
+    final TextEditingController roomNameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create New Chat Room'),
+        content: TextField(
+          controller: roomNameController,
+          decoration: const InputDecoration(
+            hintText: 'Enter room name',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final roomName = roomNameController.text.trim();
+              if (roomName.isNotEmpty) {
+                await supabase.from('chat_rooms').insert({'name': roomName});
+                Navigator.pop(context);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Room name cannot be empty')),
+                );
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Chat Rooms')),
+      appBar: AppBar(
+        title: const Text('Chat Rooms'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.more_vert),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                ),
+                builder: (context) => _buildDrawerContent(),
+              );
+            },
+          ),
+        ],
+      ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _chatRoomsStream,
         builder: (context, snapshot) {
@@ -61,6 +127,40 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
             return const Center(child: CircularProgressIndicator());
           }
         },
+      ),
+    );
+  }
+
+  Widget _buildDrawerContent() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.add),
+            title: const Text('Create New Chat Room'),
+            onTap: () {
+              Navigator.pop(context);
+              _showCreateRoomDialog();
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('Log out'),
+            onTap: () async {
+              Navigator.pop(context);
+              await _authController.signOut();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginPage()),
+              );
+            },
+          ),
+
+        ],
       ),
     );
   }

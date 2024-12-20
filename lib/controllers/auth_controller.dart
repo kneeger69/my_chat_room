@@ -49,4 +49,9 @@ class AuthController {
       context.showErrorSnackBar(message: unexpectedErrorMessage);
     }
   }
+
+  Future<void> signOut() async {
+    await supabase.auth.signOut();
+  }
+
 }
