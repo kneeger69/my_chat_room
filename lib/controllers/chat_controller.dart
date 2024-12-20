@@ -60,8 +60,4 @@ class ChatController {
   Future<void> deleteMessage(String messageId) async {
     await supabase.from('messages').delete().eq('id', messageId);
   }
-
-  Future<void> signOut() async {
-    await supabase.auth.signOut();
-  }
 }

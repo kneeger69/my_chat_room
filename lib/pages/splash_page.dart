@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:my_chat_app/pages/chat_page.dart';
-import 'package:my_chat_app/pages/register_page.dart';
+import 'package:my_chat_app/pages/login_page.dart';
 import 'package:my_chat_app/utils/constants.dart';
 
 import 'list_chat_room_page.dart';
@@ -25,7 +25,7 @@ class SplashPageState extends State<SplashPage> {
 
     final session = supabase.auth.currentSession;
     if (session == null) {
-      Navigator.of(context).pushAndRemoveUntil(RegisterPage.route(), (route) => false);
+      Navigator.of(context).pushAndRemoveUntil(LoginPage.route(), (route) => false);
     } else {
       Navigator.of(context).pushAndRemoveUntil(ChatRoomListPage.route(), (route) => false);
     }

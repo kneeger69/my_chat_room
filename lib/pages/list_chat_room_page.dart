@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:my_chat_app/pages/chat_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../controllers/auth_controller.dart';
+import '../controllers/chat_controller.dart';
 import '../utils/constants.dart';
+import 'login_page.dart';
 
 class ChatRoomListPage extends StatefulWidget {
   const ChatRoomListPage({Key? key}) : super(key: key);
@@ -16,11 +19,13 @@ class ChatRoomListPage extends StatefulWidget {
 }
 
 class _ChatRoomListPageState extends State<ChatRoomListPage> {
+  late final AuthController _authController;
   late final Stream<List<Map<String, dynamic>>> _chatRoomsStream;
 
   @override
   void initState() {
     super.initState();
+    _authController = AuthController();
     _chatRoomsStream = supabase
         .from('chat_rooms')
         .stream(primaryKey: ['id'])
@@ -144,12 +149,17 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
           const Divider(),
           ListTile(
             leading: const Icon(Icons.logout),
-            title: const Text('Logout'),
-            onTap: () {
+            title: const Text('Log out'),
+            onTap: () async {
               Navigator.pop(context);
-              _logout();
+              await _authController.signOut();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginPage()),
+              );
             },
           ),
+
         ],
       ),
     );
