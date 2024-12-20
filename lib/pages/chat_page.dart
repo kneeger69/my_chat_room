@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:my_chat_app/pages/login_page.dart';
+import 'package:my_chat_app/controllers/chat_controller.dart';
 import 'package:my_chat_app/models/message.dart';
-import 'package:my_chat_app/models/profile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart';
+import '../models/profile.dart';
 import '../utils/constants.dart';
+import 'login_page.dart';
 
 class ChatPage extends StatefulWidget {
   final String roomId;
@@ -22,73 +23,24 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
+  late final ChatController _controller;
   late final Stream<List<Message>> _messagesStream;
-  final Map<String, Profile> _profileCache = {};
   String chatRoomName = '';
 
   @override
   void initState() {
     super.initState();
-    final myUserId = supabase.auth.currentUser!.id; // Get the current user ID
-    _messagesStream = supabase
-        .from('messages')
-        .stream(primaryKey: ['id'])
-        .eq('chat_room_id', widget.roomId)
-        .order('created_at')
-        .map((maps) =>
-        maps
-            .map((map) =>
-            Message.fromMap(map: map, myUserId: myUserId)) // Pass myUserId here
-            .toList());
+    _controller = ChatController(widget.roomId);
+    final myUserId = supabase.auth.currentUser!.id;
+    _messagesStream = _controller.getMessagesStream(myUserId);
     _loadChatRoomName();
   }
 
   Future<void> _loadChatRoomName() async {
-    try {
-      final data = await supabase
-          .from('chat_rooms')
-          .select('name')
-          .eq('id', widget.roomId)
-          .single();
-
-      setState(() {
-        chatRoomName = data['name'];
-      });
-    } catch (e) {
-      // Xử lý lỗi nếu không thể lấy tên chat room
-      setState(() {
-        chatRoomName = 'Unknown Chat Room';
-      });
-    }
-  }
-
-  Future<void> _loadProfileCache(String profileId) async {
-    if (_profileCache[profileId] != null) {
-      return;
-    }
-    final data =
-    await supabase.from('profiles').select().eq('id', profileId).single();
-    final profile = Profile.fromMap(data);
+    final name = await _controller.loadChatRoomName();
     setState(() {
-      _profileCache[profileId] = profile;
+      chatRoomName = name;
     });
-  }
-
-  // Thực hiện đăng xuất
-  Future<void> _signOut() async {
-    try {
-      await supabase.auth.signOut(); // Đăng xuất người dùng
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (
-            context) => const LoginPage()), // Chuyển về màn hình đăng nhập
-      );
-    } catch (e) {
-      // Xử lý lỗi nếu có
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error logging out')),
-      );
-    }
   }
 
   @override
@@ -99,7 +51,13 @@ class _ChatPageState extends State<ChatPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.exit_to_app),
-            onPressed: _signOut, // Gọi phương thức đăng xuất
+            onPressed: () async {
+              await _controller.signOut();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginPage()),
+              );
+            },
           ),
         ],
       ),
@@ -120,15 +78,15 @@ class _ChatPageState extends State<ChatPage> {
                     itemCount: messages.length,
                     itemBuilder: (context, index) {
                       final message = messages[index];
-                      _loadProfileCache(message.profileId);
+                      _controller.loadProfileCache(message.profileId);
                       return _ChatBubble(
                         message: message,
-                        profile: _profileCache[message.profileId],
+                        profile: _controller.getCachedProfile(message.profileId),
                       );
                     },
                   ),
                 ),
-                _MessageBar(roomId: widget.roomId), // Pass roomId here
+                _MessageBar(controller: _controller, roomId: widget.roomId,),
               ],
             );
           } else {
@@ -140,10 +98,11 @@ class _ChatPageState extends State<ChatPage> {
   }
 }
 
+
 class _MessageBar extends StatefulWidget {
   final String roomId;  // Add roomId as a parameter
 
-  const _MessageBar({super.key, required this.roomId});
+  const _MessageBar({super.key, required this.roomId, required controller});
 
   @override
   State<_MessageBar> createState() => _MessageBarState();
@@ -209,7 +168,7 @@ class _MessageBarState extends State<_MessageBar> {
       await supabase.from('messages').insert({
         'profile_id': myUserId,
         'content': text,
-        'chat_room_id': widget.roomId, // Use roomId passed from ChatPage
+        'chat_room_id': widget.roomId,
       });
     } on PostgrestException catch (error) {
       context.showErrorSnackBar(message: error.message);
@@ -231,16 +190,14 @@ class _ChatBubble extends StatelessWidget {
 
   Future<void> _deleteMessage(BuildContext context) async {
     try {
-      // Xóa tin nhắn khỏi bảng messages
       await supabase.from('messages').delete().eq('id', message.id);
-      Navigator.pop(context); // Đóng modal sau khi xóa
+      Navigator.pop(context);
     } catch (e) {
       context.showErrorSnackBar(message: 'Error deleting message');
     }
   }
 
   void _showDeleteDialog(BuildContext context) {
-    // Hiển thị modal xác nhận xóa tin nhắn
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -249,11 +206,11 @@ class _ChatBubble extends StatelessWidget {
           content: const Text('Are you sure to delete this message?'),
           actions: <Widget>[
             TextButton(
-              onPressed: () => Navigator.pop(context), // Đóng modal mà không làm gì
+              onPressed: () => Navigator.pop(context),
               child: const Text('Delete'),
             ),
             TextButton(
-              onPressed: () => _deleteMessage(context), // Gọi phương thức xóa tin nhắn
+              onPressed: () => _deleteMessage(context),
               child: const Text('Cancel'),
             ),
           ],
@@ -264,14 +221,12 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Xác định người dùng hiện tại
     final currentUserId = supabase.auth.currentUser?.id;
 
-    // Kiểm tra xem tin nhắn có phải của người dùng hiện tại không
     final isMine = message.profileId == currentUserId;
 
     List<Widget> chatContents = [
-      if (!isMine) // Nếu không phải là người dùng hiện tại, hiển thị avatar và username
+      if (!isMine)
         CircleAvatar(
           child: profile == null
               ? preloader
@@ -293,7 +248,7 @@ class _ChatBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!isMine) // Chỉ hiển thị username khi tin nhắn không phải của người dùng hiện tại
+              if (!isMine)
                 Text(
                   profile?.username ?? 'Loading...',
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -302,7 +257,7 @@ class _ChatBubble extends StatelessWidget {
                   color: isMine ? Colors.white : Colors.black,
                 ),
               ),
-              const SizedBox(height: 4), // Khoảng cách giữa tin nhắn và thời gian
+              const SizedBox(height: 4),
               if(!isMine)
                 Text(
                   format(message.createdAt, locale: 'en_short'),
@@ -318,10 +273,10 @@ class _ChatBubble extends StatelessWidget {
         ),
       ),
       const SizedBox(width: 12),
-      if (isMine) // Nếu tin nhắn thuộc về người dùng hiện tại, hiển thị biểu tượng 3 chấm
+      if (isMine)
         IconButton(
           icon: Icon(Icons.more_vert, color: Colors.grey),
-          onPressed: () => _showDeleteDialog(context), // Hiển thị modal xác nhận xóa
+          onPressed: () => _showDeleteDialog(context),
         ),
     ];
 
