@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:my_chat_app/pages/chat_page.dart';
+import 'package:my_chat_app/pages/profile_user_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../controllers/auth_controller.dart';
@@ -31,11 +32,6 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
         .stream(primaryKey: ['id'])
         .order('created_at')
         .map((maps) => maps.toList());
-  }
-
-  void _logout() async {
-    await supabase.auth.signOut();
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
   void _showCreateRoomDialog() {
@@ -113,7 +109,6 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
                 return ListTile(
                   title: Text(room['name'] ?? 'Unnamed Room'),
                   onTap: () {
-                    // Navigate to the selected room
                     final roomId = room['id'];
                     Navigator.push(
                       context,
@@ -138,6 +133,20 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: const Text('User information'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const UserProfilePage(),
+                ),
+              );
+            },
+          ),
+
           ListTile(
             leading: const Icon(Icons.add),
             title: const Text('Create New Chat Room'),

@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart';
 import '../models/profile.dart';
 import '../utils/constants.dart';
-import 'login_page.dart';
 
 class ChatPage extends StatefulWidget {
   final String roomId;
@@ -43,23 +42,78 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  Future<void> _deleteChatRoom() async {
+    try {
+      await _controller.deleteChatRoom();
+      Navigator.pop(context);
+      Navigator.pop(context);
+    } catch (e) {
+      context.showErrorSnackBar(message: e.toString());
+    }
+  }
+
+
+  Future<void> _renameChatRoom() async {
+    final TextEditingController roomNameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename Chat Room'),
+        content: TextField(
+          controller: roomNameController,
+          decoration: const InputDecoration(
+            hintText: 'Enter new room name',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+
+          TextButton(
+            onPressed: () async {
+              final newName = roomNameController.text.trim();
+              try {
+                await _controller.renameChatRoom(newName);
+                setState(() {
+                  chatRoomName = newName;
+                });
+                Navigator.pop(context);
+              } catch (e) {
+                context.showErrorSnackBar(message: e.toString());
+              }
+            },
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(chatRoomName.isEmpty ? 'Loading...' : chatRoomName),
-        /*actions: [
+        actions: [
           IconButton(
-            icon: const Icon(Icons.exit_to_app),
-            onPressed: () async {
-              await _controller.signOut();
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginPage()),
+            icon: const Icon(Icons.more_vert),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                ),
+                builder: (context) => _buildDrawerContent(),
               );
             },
           ),
-        ],*/
+        ],
       ),
       body: StreamBuilder<List<Message>>(
         stream: _messagesStream,
@@ -81,12 +135,16 @@ class _ChatPageState extends State<ChatPage> {
                       _controller.loadProfileCache(message.profileId);
                       return _ChatBubble(
                         message: message,
-                        profile: _controller.getCachedProfile(message.profileId),
+                        profile: _controller
+                            .getCachedProfile(message.profileId),
                       );
                     },
                   ),
                 ),
-                _MessageBar(controller: _controller, roomId: widget.roomId,),
+                _MessageBar(
+                  controller: _controller,
+                  roomId: widget.roomId,
+                ),
               ],
             );
           } else {
@@ -96,13 +154,39 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
   }
+
+  Widget _buildDrawerContent() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.edit),
+            title: const Text('Rename Chat Room'),
+            onTap: () {
+              Navigator.pop(context);
+              _renameChatRoom();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete),
+            title: const Text('Delete Chat Room'),
+            onTap: () {
+              _deleteChatRoom();
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-
 class _MessageBar extends StatefulWidget {
-  final String roomId;  // Add roomId as a parameter
+  final String roomId;
 
-  const _MessageBar({super.key, required this.roomId, required controller});
+  const _MessageBar({required this.roomId, required controller});
 
   @override
   State<_MessageBar> createState() => _MessageBarState();
@@ -136,7 +220,7 @@ class _MessageBarState extends State<_MessageBar> {
               ),
               TextButton(
                 onPressed: () => _submitMessage(),
-                child: const Text('Send'),
+                child: const Icon(Icons.send)
               ),
             ],
           ),
@@ -180,10 +264,9 @@ class _MessageBarState extends State<_MessageBar> {
 
 class _ChatBubble extends StatelessWidget {
   const _ChatBubble({
-    Key? key,
     required this.message,
     required this.profile,
-  }) : super(key: key);
+  });
 
   final Message message;
   final Profile? profile;
@@ -228,9 +311,15 @@ class _ChatBubble extends StatelessWidget {
     List<Widget> chatContents = [
       if (!isMine)
         CircleAvatar(
-          child: profile == null
-              ? preloader
-              : Text(profile!.username.substring(0, 2)),
+          backgroundImage: profile?.avatarUrl != null && profile!.avatarUrl.isNotEmpty
+              ? NetworkImage(profile!.avatarUrl)
+              : null,
+          child: profile?.avatarUrl == null || profile!.avatarUrl.isEmpty
+              ? Text(
+            profile?.username.substring(0, 2).toUpperCase() ?? '?',
+            style: const TextStyle(color: Colors.white),
+          )
+              : null,
         ),
       const SizedBox(width: 12),
       Flexible(
@@ -251,7 +340,7 @@ class _ChatBubble extends StatelessWidget {
               if (!isMine)
                 Text(
                   profile?.username ?? 'Loading...',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               Text(message.content, style: TextStyle(fontSize: 16,
                   color: isMine ? Colors.white : Colors.black,
@@ -261,12 +350,12 @@ class _ChatBubble extends StatelessWidget {
               if(!isMine)
                 Text(
                   format(message.createdAt, locale: 'en_short'),
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               if(isMine)
                 Text(
                     format(message.createdAt, locale: 'en_short'),
-                    style: TextStyle(fontSize: 12, color: Colors.white),
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
                 ),
             ],
           ),
@@ -275,7 +364,7 @@ class _ChatBubble extends StatelessWidget {
       const SizedBox(width: 12),
       if (isMine)
         IconButton(
-          icon: Icon(Icons.more_vert, color: Colors.grey),
+          icon: const Icon(Icons.more_vert, color: Colors.grey),
           onPressed: () => _showDeleteDialog(context),
         ),
     ];

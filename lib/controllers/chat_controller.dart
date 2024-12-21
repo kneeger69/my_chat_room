@@ -60,4 +60,15 @@ class ChatController {
   Future<void> deleteMessage(String messageId) async {
     await supabase.from('messages').delete().eq('id', messageId);
   }
+
+  Future<void> deleteChatRoom() async {
+    await supabase.from('chat_rooms').delete().eq('id', roomId);
+  }
+
+  Future<void> renameChatRoom(String newName) async {
+    if (newName.isEmpty) {
+      throw Exception('Chat room name cannot be empty');
+    }
+    return supabase.from('chat_rooms').update({'name': newName}).eq('id', roomId);
+  }
 }
