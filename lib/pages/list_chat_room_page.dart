@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:my_chat_app/pages/chat_page.dart';
 import 'package:my_chat_app/pages/profile_user_page.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../controllers/auth_controller.dart';
-import '../controllers/chat_controller.dart';
 import '../utils/constants.dart';
 import 'login_page.dart';
 
 class ChatRoomListPage extends StatefulWidget {
-  const ChatRoomListPage({Key? key}) : super(key: key);
+  const ChatRoomListPage({super.key});
 
   static Route<void> route() {
     return MaterialPageRoute(builder: (context) => const ChatRoomListPage());
@@ -56,8 +53,8 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
             onPressed: () async {
               final roomName = roomNameController.text.trim();
               if (roomName.isNotEmpty) {
-                await supabase.from('chat_rooms').insert({'name': roomName});
                 Navigator.pop(context);
+                await supabase.from('chat_rooms').insert({'name': roomName});
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Room name cannot be empty')),
@@ -161,11 +158,11 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
             title: const Text('Log out'),
             onTap: () async {
               Navigator.pop(context);
-              await _authController.signOut();
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (context) => const LoginPage()),
               );
+              await _authController.signOut();
             },
           ),
 
