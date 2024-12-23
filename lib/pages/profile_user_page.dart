@@ -109,6 +109,103 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
   }
 
+  void _editProfile() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final usernameController = TextEditingController(text: _profile?.username);
+        final emailController = TextEditingController(
+            text: Supabase.instance.client.auth.currentUser?.email);
+
+        return AlertDialog(
+          title: const Text('Edit Profile'),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: usernameController,
+                  decoration: const InputDecoration(labelText: 'Username'),
+                ),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: emailController,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                try {
+                  setState(() {
+                    _isLoading = true;
+                  });
+
+                  Navigator.pop(context);
+
+                  setState(() {
+                    _profile = _profile?.copy(
+                      username: usernameController.text.trim(),
+                      email: emailController.text.trim(),
+                    );
+                  });
+
+                  final currentUser = Supabase.instance.client.auth.currentUser;
+                  if (currentUser != null) {
+                    await Supabase.instance.client.auth.updateUser(
+                      UserAttributes(
+                        email: emailController.text.trim(),  // Cập nhật email
+                      ),
+                    );
+
+                  }
+
+
+                  // Update profile in database
+                  await Supabase.instance.client.from('profiles').update({
+                    'username': usernameController.text.trim(),
+                    'email' : emailController.text.trim(),
+                  }).eq('id', _profile?.id);
+
+                  /*final currentUser = Supabase.instance.client.auth.currentUser;
+                  if (currentUser != null) {
+                    await Supabase.instance.client.auth.updateUser(
+                      UserAttributes(
+                        email: emailController.text.trim(),  // Update email
+                      ),
+                    );
+                  }*/
+                  await _loadUserProfile();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Profile updated successfully!')),
+                  );
+                } catch (e) {
+                  debugPrint('Error updating profile: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to update profile')),
+                  );
+                } finally {
+                  setState(() {
+                    _isLoading = false;
+                  });
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -144,25 +241,29 @@ class _UserProfilePageState extends State<UserProfilePage> {
             const SizedBox(height: 20),
             ListTile(
               leading: const Icon(Icons.person),
+              subtitle: const Text('User name'),
               title: Text(_profile?.username ?? 'Unknown'),
-              subtitle: const Text('Username'),
             ),
             ListTile(
               leading: const Icon(Icons.email),
-              title: Text(Supabase.instance.client.auth.currentUser?.email ??
-                  'Unknown'),
               subtitle: const Text('Email'),
+              title: Text(_profile?.email ??
+                  'Unknown'),
             ),
             ListTile(
               leading: const Icon(Icons.calendar_today),
+              subtitle: const Text('Account created'),
               title: Text(
                 _profile?.createdAt.toLocal().toString().split(' ')[0] ??
                     'Unknown',
               ),
-              subtitle: const Text('Account Created'),
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _editProfile,
+        child: const Icon(Icons.edit),
       ),
     );
   }

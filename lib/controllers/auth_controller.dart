@@ -37,7 +37,7 @@ class AuthController {
       await _supabase.auth.signUp(
         email: email,
         password: password,
-        data: {'username': username},
+        data: {'username': username, 'email' : email},
       );
       Navigator.of(context).pushAndRemoveUntil(
         ChatRoomListPage.route(),

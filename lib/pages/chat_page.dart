@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:my_chat_app/controllers/chat_controller.dart';
 import 'package:my_chat_app/models/message.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:timeago/timeago.dart';
 import '../models/profile.dart';
 import '../utils/constants.dart';
 
@@ -43,13 +41,9 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _deleteChatRoom() async {
-    try {
+      Navigator.pop(context);
+      Navigator.pop(context);
       await _controller.deleteChatRoom();
-      Navigator.pop(context);
-      Navigator.pop(context);
-    } catch (e) {
-      context.showErrorSnackBar(message: e.toString());
-    }
   }
 
 
@@ -70,18 +64,15 @@ class _ChatPageState extends State<ChatPage> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
-
           TextButton(
             onPressed: () async {
               final newName = roomNameController.text.trim();
-              try {
-                await _controller.renameChatRoom(newName);
+              Navigator.pop(context);
+              await _controller.renameChatRoom(newName);
+              if (mounted) {
                 setState(() {
                   chatRoomName = newName;
                 });
-                Navigator.pop(context);
-              } catch (e) {
-                context.showErrorSnackBar(message: e.toString());
               }
             },
             child: const Text('Rename'),
@@ -90,6 +81,7 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
   }
+
 
 
   @override
@@ -137,6 +129,7 @@ class _ChatPageState extends State<ChatPage> {
                         message: message,
                         profile: _controller
                             .getCachedProfile(message.profileId),
+                        controller: _controller,
                       );
                     },
                   ),
@@ -219,8 +212,8 @@ class _MessageBarState extends State<_MessageBar> {
                 ),
               ),
               TextButton(
-                onPressed: () => _submitMessage(),
-                child: const Icon(Icons.send)
+                  onPressed: () => _submitMessage(),
+                  child: const Icon(Icons.send)
               ),
             ],
           ),
@@ -248,17 +241,11 @@ class _MessageBarState extends State<_MessageBar> {
       return;
     }
     _textController.clear();
-    try {
-      await supabase.from('messages').insert({
-        'profile_id': myUserId,
-        'content': text,
-        'chat_room_id': widget.roomId,
-      });
-    } on PostgrestException catch (error) {
-      context.showErrorSnackBar(message: error.message);
-    } catch (_) {
-      context.showErrorSnackBar(message: unexpectedErrorMessage);
-    }
+    await supabase.from('messages').insert({
+      'profile_id': myUserId,
+      'content': text,
+      'chat_room_id': widget.roomId,
+    });
   }
 }
 
@@ -266,18 +253,16 @@ class _ChatBubble extends StatelessWidget {
   const _ChatBubble({
     required this.message,
     required this.profile,
+    required this.controller,
   });
 
   final Message message;
   final Profile? profile;
+  final ChatController controller;
 
   Future<void> _deleteMessage(BuildContext context) async {
-    try {
-      await supabase.from('messages').delete().eq('id', message.id);
-      Navigator.pop(context);
-    } catch (e) {
-      context.showErrorSnackBar(message: 'Error deleting message');
-    }
+    Navigator.pop(context);
+    await supabase.from('messages').delete().eq('id', message.id);
   }
 
   void _showDeleteDialog(BuildContext context) {
@@ -290,11 +275,11 @@ class _ChatBubble extends StatelessWidget {
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Delete'),
+              child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () => _deleteMessage(context),
-              child: const Text('Cancel'),
+              child: const Text('Delete'),
             ),
           ],
         );
@@ -305,83 +290,138 @@ class _ChatBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentUserId = supabase.auth.currentUser?.id;
-
     final isMine = message.profileId == currentUserId;
 
-    List<Widget> chatContents = [
-      if (!isMine)
-        CircleAvatar(
-          backgroundImage: profile?.avatarUrl != null && profile!.avatarUrl.isNotEmpty
-              ? NetworkImage(profile!.avatarUrl)
-              : null,
-          child: profile?.avatarUrl == null || profile!.avatarUrl.isEmpty
-              ? Text(
-            profile?.username.substring(0, 2).toUpperCase() ?? '?',
-            style: const TextStyle(color: Colors.white),
-          )
-              : null,
-        ),
-      const SizedBox(width: 12),
-      Flexible(
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            vertical: 8,
-            horizontal: 12,
-          ),
-          decoration: BoxDecoration(
-            color: isMine
-                ? Colors.blue[500]
-                : Colors.grey[300],
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!isMine)
-                Text(
-                  profile?.username ?? 'Loading...',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+    // FutureBuilder để tải profile và hiển thị thông tin người dùng
+    return FutureBuilder<Profile?>(
+      future: controller.loadProfileCache(message.profileId),
+      // Tải profile từ cache
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          // Nếu vẫn đang tải, hiển thị một placeholder hoặc loader
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
+            child: Row(
+              mainAxisAlignment:
+              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+              children: [
+                if (!isMine)
+                  const CircleAvatar(
+                    child: CircularProgressIndicator(),
+                  ),
+                // Có thể thêm một loader nếu cần
+              ],
+            ),
+          );
+        } else if (snapshot.hasError) {
+          // Nếu có lỗi khi tải, hiển thị một thông báo lỗi
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
+            child: Row(
+              mainAxisAlignment:
+              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+              children: [
+                if (!isMine)
+                  const CircleAvatar(
+                    child: Icon(Icons.error),
+                  ),
+                const Text('Error loading profile'),
+              ],
+            ),
+          );
+        } else if (snapshot.hasData && snapshot.data != null) {
+          // Nếu đã có profile, hiển thị avatar và thông tin
+          final profile = snapshot.data!;
+
+          List<Widget> chatContents = [
+            if (!isMine)
+              CircleAvatar(
+                backgroundImage: profile.avatarUrl.isNotEmpty
+                    ? NetworkImage(profile.avatarUrl)
+                    : null,
+                child: profile.avatarUrl.isEmpty
+                    ? Text(
+                  profile.username.substring(0, 2).toUpperCase(),
+                  style: const TextStyle(color: Colors.white),
+                )
+                    : null,
+              ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
                 ),
-              Text(message.content, style: TextStyle(fontSize: 16,
-                  color: isMine ? Colors.white : Colors.black,
+                decoration: BoxDecoration(
+                  color: isMine ? Colors.blue[500] : Colors.grey[300],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!isMine)
+                      Text(
+                        profile.username,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    Text(
+                      message.content,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isMine ? Colors.white : Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      controller.formatMessageTime(message.createdAt),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isMine ? Colors.white : Colors.grey,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 4),
-              if(!isMine)
-                Text(
-                  format(message.createdAt, locale: 'en_short'),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              if(isMine)
-                Text(
-                    format(message.createdAt, locale: 'en_short'),
-                    style: const TextStyle(fontSize: 12, color: Colors.white),
-                ),
-            ],
-          ),
-        ),
-      ),
-      const SizedBox(width: 12),
-      if (isMine)
-        IconButton(
-          icon: const Icon(Icons.more_vert, color: Colors.grey),
-          onPressed: () => _showDeleteDialog(context),
-        ),
-    ];
+            ),
+            const SizedBox(width: 12),
+            if (isMine)
+              IconButton(
+                icon: const Icon(Icons.more_vert, color: Colors.grey),
+                onPressed: () => _showDeleteDialog(context),
+              ),
+          ];
 
-    if (isMine) {
-      chatContents = chatContents.reversed.toList();
-    }
+          if (isMine) {
+            chatContents = chatContents.reversed.toList();
+          }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
-      child: Row(
-        mainAxisAlignment:
-        isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: chatContents,
-      ),
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
+            child: Row(
+              mainAxisAlignment:
+              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+              children: chatContents,
+            ),
+          );
+        } else {
+          // Nếu không có dữ liệu nào, hiển thị một placeholder
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
+            child: Row(
+              mainAxisAlignment:
+              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+              children: [
+                if (!isMine)
+                  const CircleAvatar(
+                    child: Icon(Icons.error),
+                  ),
+                const Text('Profile not found'),
+              ],
+            ),
+          );
+        }
+      },
     );
   }
 }
-
-
