@@ -104,6 +104,16 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
               itemBuilder: (context, index) {
                 final room = rooms[index];
                 return ListTile(
+                  leading: Container(
+                    width: 50,
+                    child: CircleAvatar(
+                      radius: 60,
+                      backgroundImage: room['avatar_url'] != null &&
+                              room['avatar_url'].isNotEmpty
+                          ? NetworkImage(room['avatar_url'])
+                          : null,
+                    ),
+                  ),
                   title: Text(room['name'] ?? 'Unnamed Room'),
                   onTap: () {
                     final roomId = room['id'];
@@ -143,7 +153,6 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
               );
             },
           ),
-
           ListTile(
             leading: const Icon(Icons.add),
             title: const Text('Create New Chat Room'),
@@ -165,7 +174,6 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
               await _authController.signOut();
             },
           ),
-
         ],
       ),
     );

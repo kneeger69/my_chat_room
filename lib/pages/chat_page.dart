@@ -23,6 +23,7 @@ class _ChatPageState extends State<ChatPage> {
   late final ChatController _controller;
   late final Stream<List<Message>> _messagesStream;
   String chatRoomName = '';
+  String chatRoomAvatarUrl = '';
 
   @override
   void initState() {
@@ -40,12 +41,18 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  Future<void> _deleteChatRoom() async {
-      Navigator.pop(context);
-      Navigator.pop(context);
-      await _controller.deleteChatRoom();
+  Future<void> _loadChatRoomAvatarUrl() async {
+    final avatar_url = await _controller.loadChatRoomAvatarUrl();
+    setState(() {
+      chatRoomAvatarUrl = avatar_url;
+    });
   }
 
+  Future<void> _deleteChatRoom() async {
+    Navigator.pop(context);
+    Navigator.pop(context);
+    await _controller.deleteChatRoom();
+  }
 
   Future<void> _renameChatRoom() async {
     final TextEditingController roomNameController = TextEditingController();
@@ -82,13 +89,30 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(chatRoomName.isEmpty ? 'Loading...' : chatRoomName),
+        title: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(
+                right: 5,
+              ),
+              child: Container(
+                alignment: Alignment.centerLeft,
+                width: 50,
+                child: CircleAvatar(
+                  radius: 60,
+                  backgroundImage: chatRoomAvatarUrl.isNotEmpty
+                      ? NetworkImage(chatRoomAvatarUrl)
+                      : null,
+                ),
+              ),
+            ),
+            Text(chatRoomName.isEmpty ? 'Loading...' : chatRoomName),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.more_vert),
@@ -117,22 +141,22 @@ class _ChatPageState extends State<ChatPage> {
                 Expanded(
                   child: messages.isEmpty
                       ? const Center(
-                    child: Text('Start your conversation now :)'),
-                  )
+                          child: Text('Start your conversation now :)'),
+                        )
                       : ListView.builder(
-                    reverse: true,
-                    itemCount: messages.length,
-                    itemBuilder: (context, index) {
-                      final message = messages[index];
-                      _controller.loadProfileCache(message.profileId);
-                      return _ChatBubble(
-                        message: message,
-                        profile: _controller
-                            .getCachedProfile(message.profileId),
-                        controller: _controller,
-                      );
-                    },
-                  ),
+                          reverse: true,
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final message = messages[index];
+                            _controller.loadProfileCache(message.profileId);
+                            return _ChatBubble(
+                              message: message,
+                              profile: _controller
+                                  .getCachedProfile(message.profileId),
+                              controller: _controller,
+                            );
+                          },
+                        ),
                 ),
                 _MessageBar(
                   controller: _controller,
@@ -213,8 +237,7 @@ class _MessageBarState extends State<_MessageBar> {
               ),
               TextButton(
                   onPressed: () => _submitMessage(),
-                  child: const Icon(Icons.send)
-              ),
+                  child: const Icon(Icons.send)),
             ],
           ),
         ),
@@ -303,7 +326,7 @@ class _ChatBubble extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
             child: Row(
               mainAxisAlignment:
-              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                  isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               children: [
                 if (!isMine)
                   const CircleAvatar(
@@ -319,7 +342,7 @@ class _ChatBubble extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
             child: Row(
               mainAxisAlignment:
-              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                  isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               children: [
                 if (!isMine)
                   const CircleAvatar(
@@ -341,9 +364,9 @@ class _ChatBubble extends StatelessWidget {
                     : null,
                 child: profile.avatarUrl.isEmpty
                     ? Text(
-                  profile.username.substring(0, 2).toUpperCase(),
-                  style: const TextStyle(color: Colors.white),
-                )
+                        profile.username.substring(0, 2).toUpperCase(),
+                        style: const TextStyle(color: Colors.white),
+                      )
                     : null,
               ),
             const SizedBox(width: 12),
@@ -400,7 +423,7 @@ class _ChatBubble extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
             child: Row(
               mainAxisAlignment:
-              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                  isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               children: chatContents,
             ),
           );
@@ -410,7 +433,7 @@ class _ChatBubble extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
             child: Row(
               mainAxisAlignment:
-              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                  isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               children: [
                 if (!isMine)
                   const CircleAvatar(

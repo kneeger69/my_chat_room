@@ -32,6 +32,18 @@ class ChatController {
       return 'Unknown Chat Room';
     }
   }
+  Future<String> loadChatRoomAvatarUrl() async {
+    try {
+      final data = await supabase
+          .from('chat_rooms')
+          .select('avatar_url')
+          .eq('id', roomId)
+          .single();
+      return data['avatar_url'];
+    } catch (e) {
+      return 'Unknown Chat Room';
+    }
+  }
 
   Future<Profile?> loadProfileCache(String profileId) async {
     try {
