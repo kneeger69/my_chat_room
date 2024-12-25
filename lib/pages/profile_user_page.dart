@@ -1,9 +1,8 @@
-import 'dart:io';
-
+// user_profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../controllers/user_controller.dart';
 import '../models/profile.dart';
 
 class UserProfilePage extends StatefulWidget {
@@ -14,97 +13,49 @@ class UserProfilePage extends StatefulWidget {
 }
 
 class _UserProfilePageState extends State<UserProfilePage> {
+  late final UserController _userController;
   Profile? _profile;
   bool _isLoading = true;
   XFile? _pickedImage;
-  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
+    _userController = UserController(Supabase.instance.client);
     _loadUserProfile();
   }
 
   Future<void> _loadUserProfile() async {
+    setState(() => _isLoading = true);
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) {
-        throw Exception('No user is logged in');
-      }
-
-      final response = await Supabase.instance.client
-          .from('profiles')
-          .select()
-          .eq('id', user.id)
-          .single();
-
-      setState(() {
-        _profile = Profile.fromMap(response);
-        _isLoading = false;
-      });
+      final profile = await _userController.loadUserProfile();
+      setState(() => _profile = profile);
     } catch (e) {
       debugPrint('Error loading profile: $e');
-      setState(() {
-        _isLoading = false;
-      });
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _uploadAvatar() async {
     if (_pickedImage == null) return;
 
+    setState(() => _isLoading = true);
     try {
-      setState(() {
-        _isLoading = true;
-      });
-
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception('User not authenticated');
-      }
-
-      // Upload file to Supabase Storage
-      final file = File(_pickedImage!.path);
-      final filePath = 'avatars/$userId/${_pickedImage!.name}';
-      await Supabase.instance.client.storage
-          .from('images')
-          .upload(filePath, file, fileOptions: const FileOptions(upsert: true));
-
-      // Get public URL for the uploaded image
-      final publicURL = Supabase.instance.client.storage
-          .from('images')
-          .getPublicUrl(filePath);
-
-      // Update avatar URL in `profiles` table
-      await Supabase.instance.client.from('profiles').update({
-        'avatar_url': publicURL,
-      }).eq('id', userId);
-
-      // Reload profile after updating
-      await _loadUserProfile();
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Avatar updated successfully!')),
       );
-    } catch (e) {
-      debugPrint('Error uploading avatar: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to upload avatar')),
-      );
+      await _userController.uploadAvatar(_pickedImage!);
+      await _loadUserProfile();
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _pickImage() async {
-    final pickedImage =
-    await _imagePicker.pickImage(source: ImageSource.gallery);
+    final pickedImage = await _userController.pickImage();
     if (pickedImage != null) {
-      setState(() {
-        _pickedImage = pickedImage;
-      });
+      setState(() => _pickedImage = pickedImage);
       await _uploadAvatar();
     }
   }
@@ -119,22 +70,19 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
         return AlertDialog(
           title: const Text('Edit Profile'),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: usernameController,
-                  decoration: const InputDecoration(labelText: 'Username'),
-                ),
-                const SizedBox(height: 18),
-                TextField(
-                  controller: emailController,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                ),
-              ],
-            ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: usernameController,
+                decoration: const InputDecoration(labelText: 'Username'),
+              ),
+              const SizedBox(height: 18),
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(labelText: 'Email'),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -144,58 +92,25 @@ class _UserProfilePageState extends State<UserProfilePage> {
             TextButton(
               onPressed: () async {
                 try {
-                  setState(() {
-                    _isLoading = true;
-                  });
-
+                  setState(() => _isLoading = true);
                   Navigator.pop(context);
 
-                  setState(() {
-                    _profile = _profile?.copy(
-                      username: usernameController.text.trim(),
-                      email: emailController.text.trim(),
-                    );
-                  });
-
-                  final currentUser = Supabase.instance.client.auth.currentUser;
-                  if (currentUser != null) {
-                    await Supabase.instance.client.auth.updateUser(
-                      UserAttributes(
-                        email: emailController.text.trim(),  // Cập nhật email
-                      ),
-                    );
-
-                  }
-
-
-                  // Update profile in database
-                  await Supabase.instance.client.from('profiles').update({
-                    'username': usernameController.text.trim(),
-                    'email' : emailController.text.trim(),
-                  }).eq('id', _profile?.id);
-
-                  /*final currentUser = Supabase.instance.client.auth.currentUser;
-                  if (currentUser != null) {
-                    await Supabase.instance.client.auth.updateUser(
-                      UserAttributes(
-                        email: emailController.text.trim(),  // Update email
-                      ),
-                    );
-                  }*/
-                  await _loadUserProfile();
-
+                  final userId = _profile?.id;
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Profile updated successfully!')),
                   );
-                } catch (e) {
-                  debugPrint('Error updating profile: $e');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Failed to update profile')),
-                  );
-                } finally {
-                  setState(() {
-                    _isLoading = false;
-                  });
+                  if (userId != null) {
+                    await _userController.updateProfile(
+                      userId,
+                      usernameController.text.trim(),
+                      emailController.text.trim(),
+                    );
+                    await _loadUserProfile();
+                  }
+
+
+                }finally {
+                  setState(() => _isLoading = false);
                 }
               },
               child: const Text('Save'),
@@ -229,8 +144,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                     _profile!.avatarUrl.isNotEmpty
                     ? NetworkImage(_profile!.avatarUrl)
                     : null,
-                child: _profile?.avatarUrl == null ||
-                    _profile!.avatarUrl.isEmpty
+                child: _profile?.avatarUrl == null || _profile!.avatarUrl.isEmpty
                     ? Text(
                   _profile?.username.substring(0, 2).toUpperCase() ?? '',
                   style: const TextStyle(fontSize: 30),
@@ -247,15 +161,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
             ListTile(
               leading: const Icon(Icons.email),
               subtitle: const Text('Email'),
-              title: Text(_profile?.email ??
-                  'Unknown'),
+              title: Text(_profile?.email ?? 'Unknown'),
             ),
             ListTile(
               leading: const Icon(Icons.calendar_today),
               subtitle: const Text('Account created'),
               title: Text(
-                _profile?.createdAt.toLocal().toString().split(' ')[0] ??
-                    'Unknown',
+                _profile?.createdAt.toLocal().toString().split(' ')[0] ?? 'Unknown',
               ),
             ),
           ],

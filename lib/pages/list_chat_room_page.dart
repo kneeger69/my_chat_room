@@ -103,25 +103,28 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
               itemCount: rooms.length,
               itemBuilder: (context, index) {
                 final room = rooms[index];
-                return ListTile(
-                  leading: Container(
-                    width: 50,
-                    child: CircleAvatar(
-                      radius: 60,
-                      backgroundImage: room['avatar_url'] != null &&
-                              room['avatar_url'].isNotEmpty
-                          ? NetworkImage(room['avatar_url'])
-                          : null,
+                return Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: ListTile(
+                    leading: SizedBox(
+                      width: 50,
+                      child: CircleAvatar(
+                        radius: 60,
+                        backgroundImage: room['avatar_url'] != null &&
+                                room['avatar_url'].isNotEmpty
+                            ? NetworkImage(room['avatar_url'])
+                            : null,
+                      ),
                     ),
+                    title: Text(room['name'], style: const TextStyle(fontSize: 18),),
+                    onTap: () {
+                      final roomId = room['id'];
+                      Navigator.push(
+                        context,
+                        ChatPage.route(roomId),
+                      );
+                    },
                   ),
-                  title: Text(room['name'] ?? 'Unnamed Room'),
-                  onTap: () {
-                    final roomId = room['id'];
-                    Navigator.push(
-                      context,
-                      ChatPage.route(roomId),
-                    );
-                  },
                 );
               },
             );
