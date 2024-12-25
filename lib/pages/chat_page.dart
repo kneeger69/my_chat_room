@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:my_chat_app/controllers/chat_controller.dart';
 import 'package:my_chat_app/models/message.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile.dart';
 import '../utils/constants.dart';
 
@@ -11,7 +12,7 @@ class ChatPage extends StatefulWidget {
 
   static Route<void> route(String roomId) {
     return MaterialPageRoute(
-      builder: (context) => ChatPage(roomId: roomId),
+      builder: (context) => ChatPage(roomId: roomId, ),
     );
   }
 
@@ -23,16 +24,26 @@ class _ChatPageState extends State<ChatPage> {
   late final ChatController _controller;
   late final Stream<List<Message>> _messagesStream;
   String chatRoomName = '';
-  String chatRoomAvatarUrl = '';
+  String chatRoomAvatar = '';
+
 
   @override
   void initState() {
     super.initState();
-    _controller = ChatController(widget.roomId);
+    _controller = ChatController(widget.roomId, context);
     final myUserId = supabase.auth.currentUser!.id;
     _messagesStream = _controller.getMessagesStream(myUserId);
+/*    _loadChatRoom();*/
     _loadChatRoomName();
+    _loadChatRoomAvatar();
   }
+
+/*  Future<void> _loadChatRoom() async {
+    final roomData = await _controller.loadChatRoom();
+    setState(() {
+      _chatRoom = roomData;
+    });
+  }*/
 
   Future<void> _loadChatRoomName() async {
     final name = await _controller.loadChatRoomName();
@@ -40,18 +51,24 @@ class _ChatPageState extends State<ChatPage> {
       chatRoomName = name;
     });
   }
-
-  Future<void> _loadChatRoomAvatarUrl() async {
-    final avatar_url = await _controller.loadChatRoomAvatarUrl();
+  Future<void> _loadChatRoomAvatar() async {
+    final avatar = await _controller.loadChatRoomAvatarUrl();
     setState(() {
-      chatRoomAvatarUrl = avatar_url;
+      chatRoomAvatar = avatar;
     });
   }
+
 
   Future<void> _deleteChatRoom() async {
     Navigator.pop(context);
     Navigator.pop(context);
     await _controller.deleteChatRoom();
+
+  }
+
+  Future<void> _updateChatAvatar() async{
+    Navigator.pop(context);
+    await _controller.updateChatAvatar(widget.roomId);
   }
 
   Future<void> _renameChatRoom() async {
@@ -89,28 +106,20 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(
-                right: 5,
-              ),
-              child: Container(
-                alignment: Alignment.centerLeft,
-                width: 50,
-                child: CircleAvatar(
-                  radius: 60,
-                  backgroundImage: chatRoomAvatarUrl.isNotEmpty
-                      ? NetworkImage(chatRoomAvatarUrl)
-                      : null,
-                ),
-              ),
+            CircleAvatar(
+                radius: 20,
+                backgroundImage: NetworkImage(chatRoomAvatar),
             ),
-            Text(chatRoomName.isEmpty ? 'Loading...' : chatRoomName),
+            const SizedBox(width: 15),
+            Text(chatRoomName),
           ],
         ),
         actions: [
@@ -131,6 +140,8 @@ class _ChatPageState extends State<ChatPage> {
           ),
         ],
       ),
+
+
       body: StreamBuilder<List<Message>>(
         stream: _messagesStream,
         builder: (context, snapshot) {
@@ -154,6 +165,7 @@ class _ChatPageState extends State<ChatPage> {
                               profile: _controller
                                   .getCachedProfile(message.profileId),
                               controller: _controller,
+
                             );
                           },
                         ),
@@ -181,15 +193,22 @@ class _ChatPageState extends State<ChatPage> {
         children: [
           ListTile(
             leading: const Icon(Icons.edit),
-            title: const Text('Rename Chat Room'),
+            title: const Text('Rename room'),
             onTap: () {
               Navigator.pop(context);
               _renameChatRoom();
             },
           ),
           ListTile(
+            leading: const Icon(Icons.image),
+            title: const Text('Update avatar'),
+            onTap: () {
+              _updateChatAvatar();
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.delete),
-            title: const Text('Delete Chat Room'),
+            title: const Text('Delete room'),
             onTap: () {
               _deleteChatRoom();
             },
@@ -202,8 +221,9 @@ class _ChatPageState extends State<ChatPage> {
 
 class _MessageBar extends StatefulWidget {
   final String roomId;
+  final ChatController controller;
 
-  const _MessageBar({required this.roomId, required controller});
+  const _MessageBar({required this.roomId, required this.controller});
 
   @override
   State<_MessageBar> createState() => _MessageBarState();
@@ -211,6 +231,26 @@ class _MessageBar extends StatefulWidget {
 
 class _MessageBarState extends State<_MessageBar> {
   late final TextEditingController _textController;
+
+  @override
+  void initState() {
+    _textController = TextEditingController();
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  void _submitMessage() async {
+    final text = _textController.text.trim();
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    await widget.controller.sendMessage(text, userId);
+    _textController.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -245,31 +285,7 @@ class _MessageBarState extends State<_MessageBar> {
     );
   }
 
-  @override
-  void initState() {
-    _textController = TextEditingController();
-    super.initState();
-  }
 
-  @override
-  void dispose() {
-    _textController.dispose();
-    super.dispose();
-  }
-
-  void _submitMessage() async {
-    final text = _textController.text;
-    final myUserId = supabase.auth.currentUser!.id;
-    if (text.isEmpty) {
-      return;
-    }
-    _textController.clear();
-    await supabase.from('messages').insert({
-      'profile_id': myUserId,
-      'content': text,
-      'chat_room_id': widget.roomId,
-    });
-  }
 }
 
 class _ChatBubble extends StatelessWidget {
@@ -283,66 +299,34 @@ class _ChatBubble extends StatelessWidget {
   final Profile? profile;
   final ChatController controller;
 
-  Future<void> _deleteMessage(BuildContext context) async {
-    Navigator.pop(context);
-    await supabase.from('messages').delete().eq('id', message.id);
-  }
-
-  void _showDeleteDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete message'),
-          content: const Text('Are you sure to delete this message?'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => _deleteMessage(context),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     final currentUserId = supabase.auth.currentUser?.id;
     final isMine = message.profileId == currentUserId;
 
-    // FutureBuilder để tải profile và hiển thị thông tin người dùng
-    return FutureBuilder<Profile?>(
-      future: controller.loadProfileCache(message.profileId),
-      // Tải profile từ cache
+    // Thay vì FutureBuilder, sử dụng StreamBuilder
+    return StreamBuilder<Profile?>(
+      stream: controller.loadProfileCache(message.profileId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // Nếu vẫn đang tải, hiển thị một placeholder hoặc loader
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
             child: Row(
-              mainAxisAlignment:
-                  isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+              mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               children: [
                 if (!isMine)
                   const CircleAvatar(
                     child: CircularProgressIndicator(),
                   ),
-                // Có thể thêm một loader nếu cần
               ],
             ),
           );
         } else if (snapshot.hasError) {
-          // Nếu có lỗi khi tải, hiển thị một thông báo lỗi
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
             child: Row(
-              mainAxisAlignment:
-                  isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+              mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               children: [
                 if (!isMine)
                   const CircleAvatar(
@@ -353,7 +337,6 @@ class _ChatBubble extends StatelessWidget {
             ),
           );
         } else if (snapshot.hasData && snapshot.data != null) {
-          // Nếu đã có profile, hiển thị avatar và thông tin
           final profile = snapshot.data!;
 
           List<Widget> chatContents = [
@@ -364,9 +347,9 @@ class _ChatBubble extends StatelessWidget {
                     : null,
                 child: profile.avatarUrl.isEmpty
                     ? Text(
-                        profile.username.substring(0, 2).toUpperCase(),
-                        style: const TextStyle(color: Colors.white),
-                      )
+                  profile.username.substring(0, 2).toUpperCase(),
+                  style: const TextStyle(color: Colors.white),
+                )
                     : null,
               ),
             const SizedBox(width: 12),
@@ -411,7 +394,30 @@ class _ChatBubble extends StatelessWidget {
             if (isMine)
               IconButton(
                 icon: const Icon(Icons.more_vert, color: Colors.grey),
-                onPressed: () => _showDeleteDialog(context),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text('Delete Message'),
+                        content: const Text('Are you sure you want to delete this message?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              Navigator.of(context).pop();
+                              await controller.deleteMessage(message.id);
+                            },
+                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
               ),
           ];
 
@@ -422,18 +428,15 @@ class _ChatBubble extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
             child: Row(
-              mainAxisAlignment:
-                  isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+              mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               children: chatContents,
             ),
           );
         } else {
-          // Nếu không có dữ liệu nào, hiển thị một placeholder
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 18),
             child: Row(
-              mainAxisAlignment:
-                  isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+              mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               children: [
                 if (!isMine)
                   const CircleAvatar(
