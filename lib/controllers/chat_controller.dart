@@ -11,7 +11,7 @@ import '../utils/constants.dart';
 
 class ChatController {
   final String roomId;
-  final Map<String, Profile> _profileCache = {};
+  final Map<String, Profile> _profile = {};
   final BuildContext context;
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -21,6 +21,7 @@ class ChatController {
     return supabase
         .from('messages')
         .stream(primaryKey: ['id'])
+        .eq('chat_room_id', roomId)
         .order('created_at', ascending: false)
         .map((maps) => maps.map((map) => Message.fromMap(map: map, myUserId: myUserId)).toList());
   }
@@ -34,6 +35,10 @@ class ChatController {
       });
   }
 
+  Future<void> createChatRoom(String roomName) async{
+    await supabase.from('chat_rooms').insert({'name': roomName});
+  }
+
   Future<String> loadChatRoomName() async {
       final data = await supabase
           .from('chat_rooms')
@@ -43,7 +48,7 @@ class ChatController {
       return data['name'];
   }
 
-  Future<String> loadChatRoomAvatarUrl() async {
+  Future<String> loadChatRoomAvatar() async {
       final data = await supabase
           .from('chat_rooms')
           .select('avatar_url')
@@ -52,7 +57,7 @@ class ChatController {
       return data['avatar_url'];
   }
 
-  Stream<Profile?> loadProfileCache(String profileId) {
+  Stream<Profile?> loadProfile(String profileId) {
     return supabase
         .from('profiles')
         .stream(primaryKey: ['id'])
@@ -61,66 +66,48 @@ class ChatController {
   }
 
 
-  Profile? getCachedProfile(String profileId) {
-    return _profileCache[profileId];
+  Profile? getProfile(String profileId) {
+    return _profile[profileId];
   }
 
-  Future<void> submitMessage(String text, String myUserId) async {
-    if (text.isEmpty) {
-      return;
-    }
-    await supabase.from('messages').insert({
-      'profile_id': myUserId,
-      'content': text,
-      'chat_room_id': roomId,
-    });
-  }
 
   Future<void> deleteMessage(String messageId) async {
-    await supabase.from('messages').delete().eq('id', messageId);
+    await supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageId);
   }
 
   Future<void> deleteChatRoom() async {
-    await supabase.from('chat_rooms').delete().eq('id', roomId);
+    await supabase
+        .from('chat_rooms')
+        .delete()
+        .eq('id', roomId);
   }
 
   Future<void> renameChatRoom(String newName) async {
-    await supabase.from('chat_rooms').update({'name': newName}).eq('id', roomId);
+    await supabase
+        .from('chat_rooms')
+        .update({'name': newName})
+        .eq('id', roomId);
   }
 
 
   Future<void> updateChatAvatar(String chatRoomId) async {
-    // Chọn ảnh từ gallery
     final pickedImage = await _imagePicker.pickImage(source: ImageSource.gallery);
-    if (pickedImage == null) return;
-
-    // Hiển thị trạng thái đang tải
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Updating chat room avatar...')),
-    );
-
-    final file = File(pickedImage.path);
+    final file = File(pickedImage!.path);
     final filePath = 'chat_avatars/$chatRoomId/${pickedImage.name}';
 
-    // Upload ảnh lên Supabase Storage
     await Supabase.instance.client.storage
         .from('images')
         .upload(filePath, file, fileOptions: const FileOptions(upsert: true));
-
-    // Lấy URL công khai của ảnh
     final publicURL = Supabase.instance.client.storage
         .from('images')
         .getPublicUrl(filePath);
-
-    // Cập nhật URL avatar trong cơ sở dữ liệu
-    await Supabase.instance.client.from('chat_rooms').update({
-      'avatar_url': publicURL,
-    }).eq('id', chatRoomId);
-
-    // Thông báo thành công
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Avatar updated successfully!')),
-    );
+    await Supabase.instance.client
+        .from('chat_rooms')
+        .update({'avatar_url': publicURL})
+        .eq('id', chatRoomId);
   }
 
   String formatMessageTime(DateTime messageTime) {

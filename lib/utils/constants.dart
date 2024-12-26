@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 final supabase = Supabase.instance.client;
 
-const preloader =
+const loading =
 Center(child: CircularProgressIndicator(color: Colors.orange));
 
 const formSpacer = SizedBox(width: 16, height: 16);
