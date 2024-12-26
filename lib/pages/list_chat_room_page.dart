@@ -110,10 +110,7 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
                       width: 50,
                       child: CircleAvatar(
                         radius: 60,
-                        backgroundImage: room['avatar_url'] != null &&
-                                room['avatar_url'].isNotEmpty
-                            ? NetworkImage(room['avatar_url'])
-                            : null,
+                        backgroundImage:NetworkImage(room['avatar_url'])
                       ),
                     ),
                     title: Text(room['name'], style: const TextStyle(fontSize: 18),),

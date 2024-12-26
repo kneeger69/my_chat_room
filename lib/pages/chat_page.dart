@@ -33,17 +33,9 @@ class _ChatPageState extends State<ChatPage> {
     _controller = ChatController(widget.roomId, context);
     final myUserId = supabase.auth.currentUser!.id;
     _messagesStream = _controller.getMessagesStream(myUserId);
-/*    _loadChatRoom();*/
     _loadChatRoomName();
     _loadChatRoomAvatar();
   }
-
-/*  Future<void> _loadChatRoom() async {
-    final roomData = await _controller.loadChatRoom();
-    setState(() {
-      _chatRoom = roomData;
-    });
-  }*/
 
   Future<void> _loadChatRoomName() async {
     final name = await _controller.loadChatRoomName();
@@ -52,24 +44,24 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
   Future<void> _loadChatRoomAvatar() async {
-    final avatar = await _controller.loadChatRoomAvatarUrl();
+    final avatar = await _controller.loadChatRoomAvatar();
     setState(() {
       chatRoomAvatar = avatar;
     });
   }
-
+  Future<void> _updateChatAvatar() async{
+    Navigator.pop(context);
+    await _controller.updateChatAvatar(widget.roomId);
+    await _loadChatRoomAvatar();
+  }
 
   Future<void> _deleteChatRoom() async {
     Navigator.pop(context);
     Navigator.pop(context);
     await _controller.deleteChatRoom();
-
   }
 
-  Future<void> _updateChatAvatar() async{
-    Navigator.pop(context);
-    await _controller.updateChatAvatar(widget.roomId);
-  }
+
 
   Future<void> _renameChatRoom() async {
     final TextEditingController roomNameController = TextEditingController();
@@ -79,8 +71,8 @@ class _ChatPageState extends State<ChatPage> {
         title: const Text('Rename Chat Room'),
         content: TextField(
           controller: roomNameController,
-          decoration: const InputDecoration(
-            hintText: 'Enter new room name',
+          decoration: InputDecoration(
+            hintText: chatRoomName,
           ),
         ),
         actions: [
@@ -159,13 +151,11 @@ class _ChatPageState extends State<ChatPage> {
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
                             final message = messages[index];
-                            _controller.loadProfileCache(message.profileId);
                             return _ChatBubble(
                               message: message,
                               profile: _controller
-                                  .getCachedProfile(message.profileId),
+                                  .getProfile(message.profileId),
                               controller: _controller,
-
                             );
                           },
                         ),
@@ -177,7 +167,7 @@ class _ChatPageState extends State<ChatPage> {
               ],
             );
           } else {
-            return preloader;
+            return loading;
           }
         },
       ),
@@ -305,9 +295,8 @@ class _ChatBubble extends StatelessWidget {
     final currentUserId = supabase.auth.currentUser?.id;
     final isMine = message.profileId == currentUserId;
 
-    // Thay vì FutureBuilder, sử dụng StreamBuilder
     return StreamBuilder<Profile?>(
-      stream: controller.loadProfileCache(message.profileId),
+      stream: controller.loadProfile(message.profileId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Padding(
@@ -342,9 +331,7 @@ class _ChatBubble extends StatelessWidget {
           List<Widget> chatContents = [
             if (!isMine)
               CircleAvatar(
-                backgroundImage: profile.avatarUrl.isNotEmpty
-                    ? NetworkImage(profile.avatarUrl)
-                    : null,
+                backgroundImage: NetworkImage(profile.avatarUrl),
                 child: profile.avatarUrl.isEmpty
                     ? Text(
                   profile.username.substring(0, 2).toUpperCase(),
